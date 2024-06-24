@@ -37,7 +37,7 @@ This repository is a valuable resource for professionals in manufacturing and pr
 ## Installation
 1. Clone the repository:
 ```sh
-git clone https://github.com/yourusername/quality-control.git
+git clone https://github.com/PrGermux/quality-control.git
 cd quality-control
 ```
 2. Install the required packages:
