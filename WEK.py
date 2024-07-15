@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox, QLineEdit, QSpacerItem
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox, QLineEdit, QComboBox
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from io import StringIO, BytesIO
@@ -30,6 +30,18 @@ class WEK(QWidget):
         self.openDATButton.clicked.connect(self.loadDATFile)
         self.layout.addWidget(self.openDATButton)
 
+        # Dropdown list for calibration factors
+        self.calibrationDropdown = QComboBox()
+        self.calibrationDropdown.addItems(["100 µm", "50 µm", "Manually"])
+        self.calibrationDropdown.currentIndexChanged.connect(self.onCalibrationChange)
+        self.layout.addWidget(self.calibrationDropdown)
+
+        # Text field for custom calibration factor, initially hidden
+        self.customFactorField = QLineEdit("")
+        self.customFactorField.setPlaceholderText("Calibration factor")
+        self.customFactorField.setVisible(False)
+        self.layout.addWidget(self.customFactorField)
+
         self.processButton = QPushButton("Fit")
         self.processButton.clicked.connect(self.processData)
         self.processButton.setEnabled(False)  # Disabled until both files are loaded
@@ -41,10 +53,20 @@ class WEK(QWidget):
         self.results = QLabel("")
         self.layout.addWidget(self.results)
         
+        self.scrapTextField = QLineEdit("")
+        self.scrapTextField.setPlaceholderText("Scrap length [m]")
+        self.scrapTextField.setVisible(False)  # Initially hidden
+        self.layout.addWidget(self.scrapTextField)
+
         self.initialTextField = QLineEdit("")
         self.initialTextField.setPlaceholderText("Enter your initials")
         self.initialTextField.setVisible(False)  # Initially hidden
         self.layout.addWidget(self.initialTextField)
+
+        self.commentTextField = QLineEdit("")
+        self.commentTextField.setPlaceholderText("Comment")
+        self.commentTextField.setVisible(False)  # Initially hidden
+        self.layout.addWidget(self.commentTextField)
 
         self.saveButton = QPushButton("Save")
         self.saveButton.clicked.connect(self.exportData)
@@ -90,7 +112,13 @@ class WEK(QWidget):
                 f"CSV File loaded: {self.csv_file_name}<br>"
                 f"DAT File loaded: {self.dat_file_name}<br>"
                 "Ready to fit."
-                )
+            )
+
+    def onCalibrationChange(self, index):
+        if self.calibrationDropdown.currentText() == "Manually":
+            self.customFactorField.setVisible(True)
+        else:
+            self.customFactorField.setVisible(False)
 
     def processData(self):
         if self.csv_file_name and self.dat_file_name:
@@ -125,6 +153,10 @@ class WEK(QWidget):
         tape_folder_name = os.path.basename(os.path.dirname(process_folder_path))
         sample_folder_name = os.path.basename(process_folder_path)
 
+        scrap_length = self.scrapTextField.text()
+        if not scrap_length: scrap_length = 0
+        else: None
+        
         title_text = f"Process sheet {process_folder_name}"  # Set the title text with the folder name
         tape_text = f"Tape: {tape_folder_name}"
         sample_text = f"Sample: {sample_folder_name}"
@@ -171,6 +203,15 @@ class WEK(QWidget):
         ax2.tick_params(axis='y', which='both', direction='in')
         ax2.legend(loc='upper right')
 
+        # Determine adjusted min and max values for Sabre MA
+        sabre_ma_min = abs(self.sabre_ma_min)
+        sabre_ma_max = abs(self.sabre_ma_max)
+        if self.sabre_ma_min < 0 or self.sabre_ma_max < 0:
+            sabre_ma_min = 0
+        if self.sabre_ma_min < 0 and self.sabre_ma_max < 0:
+            sabre_ma_min = abs(self.sabre_ma_max)
+            sabre_ma_max = abs(self.sabre_ma_min)
+
         # Save to buffer
         fig.tight_layout()
         buf = BytesIO()
@@ -188,17 +229,24 @@ class WEK(QWidget):
 
         # Draw the plots
         img = ImageReader(buf)
-        c.drawImage(img, 0, height - 550, width=600, height=400, preserveAspectRatio=True, mask='auto')  # Adjusted to fit the plot
+        c.drawImage(img, 0, height - 595, width=600, height=400, preserveAspectRatio=True, mask='auto')  # Adjusted to fit the plot
 
         # Text to draw, properly formatted
         c.setFont("Helvetica", 12)
 
         c.drawString(50, height - 125, tape_text)
         c.drawString(50, height - 140, sample_text)
+        c.drawString(50, height - 155, f"Tape length: {round(max(self.df['Position']))} m")
+        c.drawString(50, height - 170, f"Scrap length: {scrap_length} m")
 
-        c.drawString(50, height - 580, f"Median band speed: {self.speed:.4f} m/s")
-        c.drawString(50, height - 595, f"Sabre 250 MA: ({self.sabre_ma_avg:.2f} ± {self.sabre_ma_std:.2f}) mm/m  [{self.sabre_ma_min:.2f}, {self.sabre_ma_max:.2f}] mm/m")
-        c.drawString(50, height - 610, f"Band width 250 MA: ({self.width_ma_avg:.2f} ± {self.width_ma_std:.2f})  [{self.width_ma_min:.2f}, {self.width_ma_max:.2f}] mm/m")
+        c.drawString(50, height - 625, f"Median band speed: {round(self.speed*60*60)} m/h")
+        c.drawString(50, height - 640, f"Sabre 250 MA: ({self.sabre_ma_avg:.2f} ± {self.sabre_ma_std:.2f}) mm/m  [{sabre_ma_min:.2f}, {sabre_ma_max:.2f}] mm/m")
+        c.drawString(50, height - 655, f"Band width 250 MA: ({self.width_ma_avg:.2f} ± {self.width_ma_std:.2f})  [{self.width_ma_min:.2f}, {self.width_ma_max:.2f}] mm/m")
+
+        # Comment
+        comment = self.commentTextField.text()
+        if comment:
+            c.drawString(50, height - 685, f"Comment: {comment}")
 
         # Get current date and time
         current_date = datetime.now().strftime("%Y-%m-%d")
@@ -271,11 +319,22 @@ class WEK(QWidget):
                                       time_diff * indices * speed,
                                       (1 + time_diff) * indices * speed)
 
+            # Determine the calibration factor based on the dropdown selection
+            factor = 1  # Default factor for "100 µm"
+            if self.calibrationDropdown.currentText() == "50 µm":
+                factor = 1.316
+            elif self.calibrationDropdown.currentText() == "Manually":
+                try:
+                    factor = float(self.customFactorField.text())
+                except ValueError:
+                    QMessageBox.warning(self, "Error", "Invalid calibration factor. Please enter a valid float value.")
+                    return
+
             # Calculate 'Sabre' column
             condition_1 = df['OUT1'] > 0
             condition_2 = df['OUT2'] > 0
             df['angle'] = np.arctan2(df['OUT2'], df['OUT1']) * 180 / np.pi  # Use arctan2 for better angle calculation
-            df['Sabre'] = np.where(condition_1 & condition_2, (((df['angle'] - 45) * 1.25 + 0.25) + 0.5) / 11.78 * 0.935, np.nan)
+            df['Sabre'] = np.where(condition_1 & condition_2, (((df['angle'] - 45) * 1.25 + 0.25) + 0.5) / 11.78 * 0.935 * factor, np.nan)
 
             df['Sabre_MA'] = df['Sabre'].rolling(window=250, min_periods=1).mean()  # Moving average for Sabre
             # Identify the last valid index of the original 'Sabre' data
@@ -303,7 +362,7 @@ class WEK(QWidget):
 
             df['Width_MA'] = df['Width'].rolling(window=250, min_periods=1).mean()  # Moving average for Width
 
-            # Identify the last valid index of the original 'Sabre' data
+            # Identify the last valid index of the original 'Width' data
             last_valid_index_width = df['Width'].last_valid_index()
 
             # Truncate the moving average series at the last valid data point
@@ -321,12 +380,15 @@ class WEK(QWidget):
             width_ma_max = df['Width_MA'].max()
             self.width_ma_max = width_ma_max
 
+            # Filter rows where 'Position', 'Sabre', and 'Width' are not NaN
+            df = df.dropna(subset=['Sabre', 'Width'])
+
             self.df = df
 
             self.label.setText(
                 f"CSV File Loaded: {CSVFileName}<br>"
                 f"DAT File Loaded: {DATFileName}"
-                )
+            )
 
             max_valid_position = df['Position'][df['Sabre'].notna()].max()
             self.max_valid_position = max_valid_position
@@ -371,6 +433,15 @@ class WEK(QWidget):
 
             self.canvas.draw()
 
+            # Determine adjusted min and max values for Sabre MA
+            sabre_ma_min = abs(self.sabre_ma_min)
+            sabre_ma_max = abs(self.sabre_ma_max)
+            if self.sabre_ma_min < 0 or self.sabre_ma_max < 0:
+                sabre_ma_min = 0
+            if self.sabre_ma_min < 0 and self.sabre_ma_max < 0:
+                sabre_ma_min = abs(self.sabre_ma_max)
+                sabre_ma_max = abs(self.sabre_ma_min)
+
             # Export data
             self.export_df = pd.DataFrame({
                 'Position [m]': df['Position'],
@@ -378,7 +449,9 @@ class WEK(QWidget):
                 'Band width [mm]': df['Width'],
             })
 
+            self.scrapTextField.setVisible(True)
             self.initialTextField.setVisible(True)
+            self.commentTextField.setVisible(True)
             self.saveButton.setVisible(True)
 
         except Exception as e:
@@ -386,7 +459,7 @@ class WEK(QWidget):
             self.label.setText("Failed to load data.")
         
         self.results.setText(
-            f'Median band speed: <b>{speed:.4f} m/s</b> <br>'
+            f'Median band speed: <b>{round(speed*60*60)} m/h</b> <br>'
             f'Sabre 250 MA: <b>({sabre_ma_avg:.2f} ± {sabre_ma_std:.2f}) mm/m</b> &nbsp; <b>[{sabre_ma_min:.2f}, {sabre_ma_max:.2f}] mm/m</b><br>'
-            f'Band width 250 MA: <b>({width_ma_avg:.2f} ± {width_ma_std:.2f}) mm</b> &nbsp; <b>[{width_ma_min:.2f}, {width_ma_max:.2f}] mm<b>'
-            )
+            f'Band width 250 MA: <b>({width_ma_avg:.2f} ± {width_ma_std:.2f}) mm</b> &nbsp; <b>[{width_ma_min:.2f}, {width_ma_max:.2f}] mm</b>'
+        )
