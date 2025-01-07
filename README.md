@@ -30,9 +30,9 @@ This repository is a valuable resource for professionals in manufacturing and pr
 
 ### Screenshots:
 
-![grafik](https://github.com/PrGermux/quality-control/assets/11144116/eb7543bd-d9f9-4a58-b650-fe36d484faee)
-![grafik](https://github.com/PrGermux/quality-control/assets/11144116/5bb52383-2ccf-4ffc-b3d5-4e8a38587638)
-![grafik](https://github.com/PrGermux/quality-control/assets/11144116/75515c53-ddd5-467c-85e1-c6475834df87)
+![grafik](https://github.com/user-attachments/assets/f9bda81d-a10b-42f5-aa1c-39b0b11c351d)
+![grafik](https://github.com/user-attachments/assets/c29b55b1-ba7b-48af-8ba4-f2d538fd98f5)
+![grafik](https://github.com/user-attachments/assets/cd9e9f90-e99c-4829-adbf-79e4fee7bf05)
 
 ## Installation
 1. Clone the repository:
